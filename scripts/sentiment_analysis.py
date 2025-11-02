@@ -1,21 +1,20 @@
+import os
 import pandas as pd
-from textblob import TextBlob
+from transformers import pipeline
 
 def run_sentiment_analysis():
-    print("Loading processed data...")
+    print("🔍 Loading processed reviews...")
     df = pd.read_parquet("data/processed/cleaned_reviews.parquet")
 
-    print("Running sentiment analysis using TextBlob...")
-    df["polarity"] = df["reviews_text"].apply(lambda x: TextBlob(x).sentiment.polarity)
-    df["sentiment"] = df["polarity"].apply(
-        lambda x: "POSITIVE" if x > 0 else ("NEGATIVE" if x < 0 else "NEUTRAL")
-    )
+    print("🤖 Loading Hugging Face model...")
+    sentiment_model = pipeline("sentiment-analysis", model="distilbert-base-uncased-finetuned-sst-2-english")
 
-    print("Sentiment analysis complete!")
-    print(df[["reviews_text", "sentiment"]].head())
+    print("⚙️ Running sentiment inference...")
+    df["sentiment"] = df["reviews_text"].apply(lambda x: sentiment_model(x[:512])[0]["label"])
 
-    df.to_parquet("data/processed/sentiment_reviews.parquet", index=False)
-    print("Saved sentiment results to data/processed/sentiment_reviews.parquet")
+    output_path = "data/processed/sentiment_reviews.parquet"
+    df.to_parquet(output_path, index=False)
+    print(f"✅ Sentiment analysis complete. Saved results to {output_path}")
 
 if __name__ == "__main__":
     run_sentiment_analysis()

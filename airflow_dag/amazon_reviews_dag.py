@@ -1,24 +1,81 @@
-
-from airflow import DAG
-from airflow.operators.python import PythonOperator
 from datetime import datetime, timedelta
-from scripts.ingest_data import ingest_data
-from scripts.process_data import process_data
-from scripts.sentiment_analysis import run_sentiment_analysis
-from scripts.load_to_mongodb import load_to_mongodb
-from scripts.visualize_results import visualize_results
+from airflow import DAG
+from airflow.operators.python_operator import PythonOperator
+import os
+import subprocess
 
+# -------------------------------
+# Define default arguments
+# -------------------------------
 default_args = {
     'owner': 'airflow',
-    'start_date': datetime(2025,10,30),
-    'retries': 2,
-    'retry_delay': timedelta(minutes=5)
+    'depends_on_past': False,
+    'start_date': datetime(2025, 1, 1),
+    'email_on_failure': False,
+    'email_on_retry': False,
+    'retries': 1,
+    'retry_delay': timedelta(minutes=5),
 }
 
-with DAG('amazon_reviews_pipeline', default_args=default_args, schedule_interval='@daily', catchup=False) as dag:
-    t1 = PythonOperator(task_id='ingest', python_callable=ingest_data)
-    t2 = PythonOperator(task_id='process', python_callable=process_data)
-    t3 = PythonOperator(task_id='sentiment', python_callable=run_sentiment_analysis)
-    t4 = PythonOperator(task_id='load_mongo', python_callable=load_to_mongodb)
-    t5 = PythonOperator(task_id='visualize', python_callable=visualize_results)
-    t1 >> t2 >> t3 >> t4 >> t5
+# -------------------------------
+# Define the DAG
+# -------------------------------
+dag = DAG(
+    'amazon_reviews_bigdata_pipeline',
+    default_args=default_args,
+    description='Amazon Reviews Big Data Pipeline with HuggingFace + Visualization',
+    schedule_interval='@daily',
+    catchup=False,
+)
+
+# -------------------------------
+# Define Python tasks
+# -------------------------------
+
+def extract_data():
+    print("📥 Extracting raw Amazon reviews data...")
+    os.system("python scripts/extract_data.py")
+
+def process_data():
+    print("🧹 Processing and cleaning data...")
+    os.system("python scripts/process_data.py")
+
+def analyze_sentiment():
+    print("🤖 Running Hugging Face sentiment analysis...")
+    os.system("python scripts/sentiment_analysis.py")
+
+def visualize_results():
+    print("📊 Generating data visualizations...")
+    os.system("python scripts/visualize_results.py")
+
+# -------------------------------
+# Create Airflow tasks
+# -------------------------------
+extract_task = PythonOperator(
+    task_id='extract_data',
+    python_callable=extract_data,
+    dag=dag,
+)
+
+process_task = PythonOperator(
+    task_id='process_data',
+    python_callable=process_data,
+    dag=dag,
+)
+
+analyze_task = PythonOperator(
+    task_id='analyze_sentiment',
+    python_callable=analyze_sentiment,
+    dag=dag,
+)
+
+visualize_task = PythonOperator(
+    task_id='visualize_results',
+    python_callable=visualize_results,
+    dag=dag,
+)
+
+# -------------------------------
+# Define task dependencies
+# -------------------------------
+extract_task >> process_task >> analyze_task >> visualize_task
